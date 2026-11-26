@@ -1,0 +1,55 @@
+name: Download and Upload to Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "URL of the file to download"
+        required: true
+        type: string
+      tag:
+        description: "Release tag to upload the file to"
+        required: true
+        type: string
+      name:
+        description: "Filename for the downloaded file (optional)"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  download-and-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download file
+        id: download
+        env:
+          URL: ${{ inputs.url }}
+          NAME: ${{ inputs.name }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          if [ -n "$NAME" ]; then
+            # -O flag used when a custom name is provided
+            wget -O "artifacts/$NAME" "$URL"
+            echo "file=artifacts/$NAME" >> "$GITHUB_OUTPUT"
+          else
+            # Let wget derive the filename from the URL
+            wget -P artifacts "$URL"
+            FILE=$(find artifacts -maxdepth 1 -type f | head -n 1)
+            if [ -z "$FILE" ]; then
+              echo "Failed to determine downloaded file" >&2
+              exit 1
+            fi
+            echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          files: ${{ steps.download.outputs.file }}
+          fail_on_unmatched_files: true
